@@ -75,8 +75,9 @@
   },
   "modes": {
     "scheduler_enabled": false,
-    "reproduction_enabled": false,
-    "writeback_enabled": false
+    "reproduction_enabled": true,
+    "writeback_enabled": false,
+    "scheduler_writeback": false
   },
   "activation": {
     "include_existing_backlog": false,

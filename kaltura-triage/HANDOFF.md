@@ -58,15 +58,24 @@ If the other person only needs manual triage (no automation), package just the s
 
 ---
 
-## Endpoint-security note (read this first)
-If the target Mac runs **AgenShield** (a macOS Endpoint Security system extension) or
-similar tooling that mediates Claude — as the source machine does — a bare `claude`
-process launched by launchd or a plain terminal is **held at exec** and unattended
-headless `claude -p` cannot run. That is expected and is why the runner is
-**detector + manual**: the launchd agent only detects and queues new tickets; you
-investigate each in the Claude desktop app (the sanctioned path) and apply writeback
-over REST. On a machine WITHOUT such tooling, `run-ticket --headless` and fuller
-automation can work, but detector + manual is the supported default.
+## How automation runs (read this first)
+There are two ways to run the pipeline; pick per operator:
+
+- **Full automation (recommended): a Claude desktop-app scheduled task.** It runs the whole
+  loop unattended — detect → investigate (skill) → write back to Jira — because it runs as
+  an app-launched session with working Claude auth. See **`automation/autotriage-task.md`**
+  for the prompt and setup. Runs while the app is open.
+- **Manual:** run the `kaltura-bug-bounty-triage` skill on a ticket in the desktop app, then
+  apply the writeback over REST (`writeback KEY --apply`).
+
+Why not a launchd `claude -p` for the investigator: on a Mac where the desktop app brokers
+Claude auth over an IPC socket, a **cold `claude` launched by launchd or a plain terminal
+has no auth channel and stalls at startup** — it can't get credentials. (This is an auth
+issue, not a security block, and it's unrelated to whether MCP servers or AgenShield are
+present.) So the *investigation* must run in an app session; the scheduled task is exactly
+that. The launchd runner (`runner.py start`) still works as an optional standalone
+**detector** (it only queues, never runs Claude), but for full automation you don't need it —
+keep `scheduler_enabled=false` to avoid two pollers.
 
 ## Enable (same on any machine; nothing acts until you do these)
 `install.sh` leaves everything OFF. Set `jira_rest.account_email` in `config.json` to the
@@ -75,17 +84,35 @@ operator's email first. Then:
    ```bash
    cd ~/.claude/kaltura-triage && python3 -m runner.runner set-token
    ```
-   (Optional, only for `run-ticket --headless` on a non-AgenShield machine: `claude setup-token` then `python3 -m runner.runner set-claude-token`. Not needed for detector + manual.)
-2. `python3 -m runner.runner doctor`  → expect **READY (detector + manual)** + "Jira REST reachable". The headless line is an informational `[--]`/`[ok]` note and never gates READY.
-3. Stage a ticket and investigate it in the desktop app:
+2. `python3 -m runner.runner doctor` → expect **READY** + "Jira REST reachable". The
+   headless `claude -p` line is informational and never gates READY (the scheduled task,
+   not `claude -p`, is what runs the investigator).
+3. Try one ticket manually first:
    ```bash
    python3 -m runner.runner run-ticket SECF-XXXX     # stages cases/SECF-XXXX/input.json + prints the steps
-   # open the desktop app, run the kaltura-bug-bounty-triage skill on it → writes cases/SECF-XXXX/assessment.json
-   python3 -m runner.runner writeback SECF-XXXX       # dry-run diff (no writes)
+   # in the desktop app, run the kaltura-bug-bounty-triage skill on it → writes cases/SECF-XXXX/assessment.json
+   python3 -m runner.runner writeback SECF-XXXX       # dry-run diff; add --apply to write
    ```
-4. `python3 -m runner.runner activate` → records the baseline so only tickets that become **new-to-scope after now** are detected.
-5. `python3 -m runner.runner set-mode scheduler_enabled true` then `python3 -m runner.runner start` (loads the LaunchAgent detector; polls every ~7 min while awake, queueing new tickets — never running claude).
-6. `writeback_enabled` is on for **manual** writeback (`writeback SECF-XXXX --apply`). `reproduction_enabled` is **on**: reproduction is a standard step of every triage, always *attempted* but bounded to a **safe** path (security test tenant, synthetic accounts/data, non-destructive, no unsafe/DoS payloads, no production auth against real accounts); if it can't be done safely it records `reproduction: blocked` + needs-input. The automation never investigates or writes to Jira on this machine (detector-only).
+4. `python3 -m runner.runner activate` → baseline so only tickets **new-to-scope after now**
+   are in scope. If a prior detector run left tickets queued, clear them first (they are
+   pre-existing) — `activate` stops re-queuing but does not empty an existing queue.
+5. Enable the modes and turn on full automation:
+   ```bash
+   python3 -m runner.runner set-mode reproduction_enabled true
+   python3 -m runner.runner set-mode writeback_enabled true
+   ```
+   Then create the scheduled task per **`automation/autotriage-task.md`** (hourly; paste the
+   prompt there) and click **Run now** once to validate + pre-approve its tools. That is the
+   full detect→investigate→writeback loop, hands-off.
+6. Leave the launchd detector **off** (`scheduler_enabled=false`) — the scheduled task does
+   its own detection. Only use `runner.py start` if you specifically want the standalone
+   launchd detector (queue-only) in addition.
+
+**Modes:** `writeback_enabled` gates all Jira writes (manual and automated). `reproduction_enabled`
+makes reproduction a standard, always-*attempted* step, bounded to a **safe** path (security test
+tenant, synthetic accounts/data, non-destructive, no unsafe/DoS payloads, no production auth against
+real accounts); when it can't be done safely it records `reproduction: blocked` and proceeds on code
+evidence.
 
 Each operator uses **their own** token (their Keychain, their Jira identity). Never share tokens or copy `state.db`/`cases/`.
 

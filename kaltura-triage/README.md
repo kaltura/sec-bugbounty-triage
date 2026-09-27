@@ -1,27 +1,32 @@
 # Kaltura Bug-Bounty Triage — local runner
 
-Local, on-your-Mac intake for HackerOne/coordinated-disclosure reports that land in
-Jira epic **SECF-29234** ("Bug Bounty H1 Program"). No cloud, no AWS, no server — a
-launchd user agent runs one detection cycle every ~7 min while you are logged in and
-awake.
+Local, on-your-Mac triage for HackerOne/coordinated-disclosure reports that land in
+Jira epic **SECF-29234** ("Bug Bounty H1 Program"). No cloud, no AWS, no server.
 
-## Architecture: DETECTOR + MANUAL
-This machine runs corporate endpoint-security tooling (**AgenShield**, a macOS
-Endpoint Security system extension, plus a `headroom` LLM egress proxy and OX hooks).
-That tooling **holds a bare `claude` process at exec**, so an unattended headless
-`claude -p` launched by launchd or a plain terminal cannot start (this is below the
-auth layer — no token/env fixes it, and bypassing an endpoint-security control is out
-of scope). Verified empirically: `claude --debug` emits zero bytes and hangs unless it
-inherits a sanctioned desktop-app session's environment.
+## Two ways to run it
+- **Full automation (recommended): a Claude desktop-app scheduled task.** Hourly, hands-off:
+  detect new-to-scope tickets → investigate with the `kaltura-bug-bounty-triage` skill →
+  write the assessment back to Jira (severity, components, priority, comment). It runs as an
+  app-launched session, so Claude auth works. See **[`automation/autotriage-task.md`](automation/autotriage-task.md)**.
+- **Manual:** run the skill on a ticket in the desktop app, then `writeback <KEY> --apply`.
 
-So the runner is split:
-- **Detector (automated, launchd):** polls Jira over REST for new-to-scope Backlog
-  tickets under SECF-29234 and queues them in `state.db`. Never runs `claude`.
-- **Investigation (manual, desktop app):** you open the `kaltura-bug-bounty-triage`
-  skill in the Claude desktop app (the sanctioned path) on each queued ticket. The
-  skill investigates and writes `cases/<KEY>/assessment.json`.
-- **Writeback (manual, REST):** `writeback <KEY> --apply` applies the reviewed
-  assessment to Jira with the full safety plan. Automation never writes.
+The pieces both paths share:
+- **Detection** (`poll`): finds new-to-scope Backlog tickets under SECF-29234 and queues them
+  in `state.db`. New-to-scope = appeared after your `activate` baseline (pre-existing backlog
+  is never touched).
+- **Investigation:** the `kaltura-bug-bounty-triage` skill (report + `gh` code trace; safe
+  reproduction in a test tenant, else recorded `blocked` and it proceeds on code evidence).
+- **Writeback** (`writeback --apply`): applies the assessment to Jira with the full safety
+  plan (human-override preserved, eligibility + version checked, no duplicate comments).
+
+### Why the investigator runs in an app session, not launchd `claude -p`
+On a Mac where the desktop app brokers Claude auth over an IPC socket (`CLAUDE_CODE_MESSAGING_SOCKET`
+/ `…_SDK_HAS_HOST_AUTH_REFRESH`), a **cold `claude` launched by launchd or a plain terminal has no
+auth channel and stalls at startup** — it can't get credentials. So the investigator has to run in an
+app-launched session; the scheduled task is exactly that. (This is an auth issue, not a security
+block, and is unrelated to AgenShield or MCP policy.) The launchd runner still works as an optional
+standalone **detector** (queue-only, never runs Claude); keep `scheduler_enabled=false` for the
+scheduled-task model so you don't run two pollers.
 
 The skill remains fully usable on its own for ad-hoc manual triage.
 
