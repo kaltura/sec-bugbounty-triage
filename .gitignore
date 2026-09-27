@@ -1,0 +1,12 @@
+# per-machine state & secrets — never commit
+state.db
+state.db-*
+*.db-wal
+*.db-shm
+cases/
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+# product-notes keeps its own local git history on each machine
+kaltura-triage/product-notes/.git/

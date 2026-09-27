@@ -1,0 +1,141 @@
+{
+  "_comment": "Local config for the Kaltura bug-bounty triage runner. Pilot defaults are conservative: everything that could act is OFF. Edit via `runner.py set-mode` or by hand; the runner re-reads this each cycle.",
+  "jira": {
+    "cloud_id": "9cebaf06-de33-468b-b9eb-8c450353db6b",
+    "site": "kaltura.atlassian.net",
+    "project": "SECF",
+    "intake_epic": "SECF-29234",
+    "epic_child_jql": "parent = SECF-29234",
+    "eligible_statuses": [
+      "Backlog"
+    ],
+    "priority_field": "priority",
+    "severity_label_prefix": "severity-",
+    "priority_ids": {
+      "1-Essential": "16",
+      "2-High": "12",
+      "3-Medium": "13",
+      "4-Low": "14",
+      "5 - Not prioritized": "15"
+    },
+    "components": {
+      "always_add": {
+        "name": "Agent Check",
+        "id": "61351"
+      },
+      "team": {
+        "Sec-KMS": {
+          "id": "61353",
+          "area": "KMS / MediaSpace front side",
+          "repos": [
+            "mediaspace",
+            "mediaspace-react-components",
+            "kms-react"
+          ]
+        },
+        "Sec-EP": {
+          "id": "61354",
+          "area": "Event Platform",
+          "repos": [
+            "eventplatform",
+            "ovp-ms-eventplatform",
+            "events-portal"
+          ]
+        },
+        "Sec-BE": {
+          "id": "61352",
+          "area": "Backend / api_v3 / core server (DEFAULT for most findings)",
+          "repos": [
+            "server",
+            "server-saas-code",
+            "kava"
+          ]
+        },
+        "Devops OVP-Sec": {
+          "id": "61248",
+          "area": "DevOps OVP (infra/helm/terraform/argocd/nginx)",
+          "repos": [
+            "ovp-argocd-tools",
+            "ovp-helm-chart-backend",
+            "ovp-helm-chart-mediaspace",
+            "kalt-terraform",
+            "nginx-vod-module-saas-s3"
+          ]
+        },
+        "Devops OTT-Sec": {
+          "id": "61249",
+          "area": "DevOps OTT (infra)",
+          "repos": [
+            "ovp-helm-chart-kava"
+          ]
+        }
+      },
+      "_note": "On every finished handling the writeback adds 'Agent Check' PLUS exactly one team component chosen by the investigation from where the actual issue/fix lives (see report-format). Existing components are preserved; no component is ever removed; creation of components is out of scope (all six already exist)."
+    }
+  },
+  "modes": {
+    "scheduler_enabled": false,
+    "reproduction_enabled": false,
+    "writeback_enabled": false
+  },
+  "activation": {
+    "include_existing_backlog": false,
+    "backlog_lookback_days": null,
+    "baseline_recorded_at": null,
+    "_note": "include_existing_backlog=false + no lookback => only tickets that become new-to-scope AFTER activation. Baseline written by `runner.py activate`."
+  },
+  "scheduler": {
+    "poll_interval_seconds": 420,
+    "poll_overlap_seconds": 120,
+    "max_concurrent_investigations": 1
+  },
+  "limits": {
+    "per_run_timeout_seconds": 1800,
+    "max_attempts_per_ticket": 3,
+    "retry_backoff_seconds": [
+      300,
+      1800,
+      7200
+    ],
+    "claim_stale_seconds": 3600,
+    "per_run_token_budget": 400000,
+    "daily_run_cap": 40,
+    "_enforceable_note": "Timeout, attempts, backoff, claim-staleness, and daily_run_cap ARE enforced locally by the runner. per_run_token_budget is passed to the investigator and recorded, but a hard token ceiling depends on the Claude CLI honoring it; treat it as advisory/telemetry, not a guarantee."
+  },
+  "jira_rest": {
+    "account_email": "",
+    "timeout_seconds": 30,
+    "_note": "Direct Jira Cloud REST backend. The API token is read from the macOS Keychain (service 'kaltura-triage-jira', account = account_email) at runtime \u2014 never stored here. Set it with `runner.py set-token`. On another machine, set account_email to that person and have them store their own token."
+  },
+  "investigator": {
+    "backend": "rest",
+    "claude_bin": "/usr/bin/env claude",
+    "model": "claude-opus-4-8",
+    "skill_name": "kaltura-bug-bounty-triage",
+    "permission_mode": "acceptEdits",
+    "allowed_tools": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "Skill",
+      "Bash(gh:*)"
+    ],
+    "_allowed_tools_note": "Narrow read/research allow-list for the unattended headless investigator so it can trace code (gh) and read docs (web) without permission prompts. No general Bash. File writes for the assessment are covered by permission_mode acceptEdits. Jira writes are additionally blocked by disallowed_write_tools and are performed only by the runner, never the investigator.",
+    "disallowed_write_tools": [
+      "mcp__*__editJiraIssue",
+      "mcp__*__addCommentToJiraIssue",
+      "mcp__*__transitionJiraIssue",
+      "mcp__*__createJiraIssue",
+      "mcp__*__addWorklogToJiraIssue"
+    ],
+    "_note": "In read-only mode the runner passes disallowed_write_tools to `claude -p --disallowed-tools` as defense-in-depth so a run cannot write Jira even if prompted. This is one layer, not a guarantee; writeback, when enabled, is done by the runner itself after review, not by the investigator."
+  },
+  "paths": {
+    "state_db": "state.db",
+    "cases_dir": "cases",
+    "product_notes_dir": "product-notes",
+    "logs_dir": "logs"
+  }
+}

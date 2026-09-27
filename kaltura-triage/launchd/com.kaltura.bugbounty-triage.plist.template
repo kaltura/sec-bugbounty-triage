@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Template. `install.sh` fills __ROOT__ / __CLAUDE_BIN_DIR__ and writes the real
+     plist to ~/Library/LaunchAgents/. Do not load this template directly. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.kaltura.bugbounty-triage</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>-m</string>
+    <string>runner.runner</string>
+    <string>poll</string>
+  </array>
+  <key>WorkingDirectory</key><string>__ROOT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>KTRI_ROOT</key><string>__ROOT__</string>
+    <key>PATH</key><string>__CLAUDE_BIN_DIR__:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StartInterval</key><integer>420</integer>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>__ROOT__/logs/poll.out.log</string>
+  <key>StandardErrorPath</key><string>__ROOT__/logs/poll.err.log</string>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+</dict>
+</plist>
