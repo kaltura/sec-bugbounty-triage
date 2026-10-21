@@ -13,6 +13,15 @@ description: >-
   Kaltura-specific business impact, and writes an assessment back to the ticket with a
   supporting internal comment. Does NOT close tickets, change workflow status, make
   bounty decisions, contact reporters, or modify source code.
+
+  EXCLUSION — post-fix verification: This skill does NOT handle tickets that are
+  already in "In Security QA" status (post-fix verification). Those tickets have an
+  existing fix deployed to a QA environment and require runtime exploit verification,
+  not initial triage. If the user asks to verify, QA, retest, validate a fix, or
+  check whether a fix holds — or if the ticket's Jira status is "In Security QA" —
+  route to the **kaltura-security-qa** skill instead. Do not attempt post-fix
+  verification with this skill; it causes excessive context use, repeated compaction,
+  late blocker discovery, and verdicts based on incomplete runtime evidence.
 ---
 
 # Kaltura Bug Bounty Triage
@@ -40,6 +49,16 @@ Plus one more when validity is **Unresolved**:
 And, for batches:
 
 - **Relative order** — within a priority band, the sequence to fix things. Several findings can share severity *and* priority and still have a clear order. This is separate from the band and goes in the comment.
+
+## Routing — initial triage vs post-fix QA
+
+This skill is for **initial triage** of new inbound reports. If any of these are true, **stop and tell the user to use `kaltura-security-qa` instead**:
+- The ticket's Jira status is "In Security QA".
+- The user asks to verify, retest, or validate a deployed fix.
+- The ticket already has a merged fix PR and the question is whether the fix holds.
+- The user says "QA this", "check the fix", "is this fixed?", or similar post-fix language.
+
+Do not proceed with triage on a post-fix ticket. The `kaltura-security-qa` skill has its own state machine, preflight checks, and verdict rules designed for runtime exploit verification against a QA build.
 
 ## Scope and hard limits
 
